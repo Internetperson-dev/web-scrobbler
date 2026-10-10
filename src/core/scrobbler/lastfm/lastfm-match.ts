@@ -54,10 +54,27 @@ export const COMBINED_SIMILARITY_FLOOR = 0.6;
 export const STRONG_COMBINED_SIMILARITY_FLOOR = 0.8;
 
 /**
- * Minimum similarity of artists for a candidate to be preferred over
- * candidates with a similar title but an unrelated artist.
+ * Minimum similarity of artists for a candidate to be considered as
+ * having the reported artist on its own. This only complements the
+ * word-by-word prefix check; a lower bigram-based threshold is not used,
+ * because short artist names share a lot of character bigrams by chance,
+ * e.g. "Yakuza 6" and "Takaya Kuroda".
  */
-export const ARTIST_SIMILARITY_FLOOR = 0.35;
+export const STRONG_ARTIST_SIMILARITY_FLOOR = 0.55;
+
+/**
+ * Minimum similarity of track titles for a candidate to be considered by
+ * the last-resort search, used when no candidate passes the strict checks
+ * above. As long as the artist resembles the reported one, a candidate
+ * with a close (but not perfect) title is still acceptable.
+ */
+export const RELAXED_TITLE_SIMILARITY_FLOOR = 0.5;
+
+/**
+ * Minimum similarity of "artist track" pairs for a candidate to be
+ * considered by the last-resort search even without a matching artist.
+ */
+export const RELAXED_COMBINED_SIMILARITY_FLOOR = 0.7;
 
 /**
  * Minimum similarity of the artist of an already found Last.fm entry; if
@@ -139,6 +156,79 @@ const VERSION_TOKENS = new Set([
 ]);
 
 /**
+ * Strip site-specific junk from a reported track title to leave the
+ * actual song title: a leading "Label:" segment and a trailing
+ * single-word parenthetical credit, e.g. "Karaoke: Today is a Diamond
+ * (Kiryu)" becomes "Today is a Diamond". Multi-word subtitles (like
+ * "Tonight (Best I Ever Had)") and version qualifiers (like "Song
+ * (Live at Wembley)") are kept as they are.
+ *
+ * @param text - Track title reported by the connector
+ * @returns Title without the site-specific junk
+ */
+function stripSiteTitle(text: string): string {
+	if (!text) {
+		return text;
+	}
+
+	const versionOrNoiseTokens = new Set([...VERSION_TOKENS, ...NOISE_TOKENS]);
+
+	// A leading segment ending with a colon, e.g. "Karaoke: …".
+	let result = text.replace(/^[^\s:]{1,20}\s*:\s+/u, '');
+
+	/*
+	 * Trailing single-word parenthetical credits, e.g. "(Kiryu)". They
+	 * are removed (repeatedly) unless they describe the version of the
+	 * track, e.g. "(Live)".
+	 */
+	for (let i = 0; i < 5; ++i) {
+		const group = /(?:\(([^()]*)\)|（([^（）]*)）)$/u.exec(result);
+		if (!group) {
+			break;
+		}
+
+		const content = (group[1] ?? group[2]).trim();
+		const tokens = content.toLowerCase().split(/\s+/u).filter(Boolean);
+		if (tokens.length !== 1 || versionOrNoiseTokens.has(tokens[0])) {
+			break;
+		}
+
+		result = result.slice(0, group.index).replace(/\s+$/u, '');
+	}
+
+	return result.trim();
+}
+
+/**
+ * Bracketed producer credit, e.g. "(prod. by Guy-Manuel de Homem-Christo)".
+ * Credits like that are common in video titles, but are not a part of the
+ * actual track title.
+ */
+const BRACKETED_PRODUCER_PATTERN =
+	/[[(【（［]\s*(?:prod\.?|produced)\s+by\s+[^)\]】）］]+[)\]】）］]/gi;
+
+/**
+ * Remove a bracketed producer credit from a reported track title while
+ * keeping its original casing, e.g. "RHYNO (prod. by Guy-Manuel de
+ * Homem-Christo)" becomes "RHYNO".
+ *
+ * @param text - Track title reported by the connector
+ * @returns Title without the producer credit
+ */
+export function removeProducerCredit(text: string): string {
+	if (!text) {
+		return text;
+	}
+
+	return (
+		text
+			.replace(BRACKETED_PRODUCER_PATTERN, ' ')
+			.replace(/\s{2,}/g, ' ')
+			.trim() || text
+	);
+}
+
+/**
  * Bracketed feat. credit, e.g. "(feat. Otis Redding)".
  */
 const BRACKETED_FEAT_PATTERN =
@@ -193,7 +283,7 @@ export function removeFeatSuffix(text: string): string {
 
 	const result = text
 		.replace(BRACKETED_FEAT_PATTERN, ' ')
-		.replace(/\s*(?:[-–—|]\s*)?(?:feat|ft|featuring)\b\.?\s+.+$/i, ' ')
+		.replace(/(?:^|\s)(?:[-–—|]\s*)?(?:feat|ft|featuring)\b\.?\s+.+$/i, ' ')
 		.replace(/\s{2,}/g, ' ')
 		.trim();
 
@@ -202,8 +292,10 @@ export function removeFeatSuffix(text: string): string {
 
 /**
  * Prepare a track title to be used as a Last.fm search query: site
- * decorations and feat. credits are removed to search for the actual
- * song, e.g. "Otis ft. Otis Redding (Official Audio)" becomes "Otis".
+ * decorations, producer credits and feat. credits are removed to search
+ * for the actual song, e.g. "Otis ft. Otis Redding (Official Audio)"
+ * becomes "Otis" and "Karaoke: Today is a Diamond (Kiryu)" becomes
+ * "Today is a Diamond".
  *
  * @param track - Track title reported by the connector
  * @returns Text to search for
@@ -213,7 +305,29 @@ export function prepareSearchQuery(track: string): string {
 		return track;
 	}
 
-	return removeFeatSuffix(removeMetadataDecorations(track)).trim() || track;
+	const cleaned = stripSiteTitle(
+		removeProducerCredit(
+			removeFeatSuffix(removeMetadataDecorations(track)),
+		),
+	).trim();
+
+	return cleaned || track;
+}
+
+/**
+ * Clean up a track title reported by a connector so that it can be
+ * compared with the titles stored on Last.fm. On top of {@link
+ * cleanForMatch}, it also strips site-specific junk from the *reported*
+ * (query) side only: a leading "Label:" segment, a trailing single-word
+ * parenthetical credit, and producer credits. Candidates found on Last.fm
+ * keep those parts, e.g. "Karaoke: Today is a Diamond (Kiryu)" is compared
+ * as "today is a diamond".
+ *
+ * @param text - Track title reported by the connector
+ * @returns Cleaned up text
+ */
+export function cleanQueryForMatch(text: string): string {
+	return toCleanTokens(stripSiteTitle(removeProducerCredit(text))).join(' ');
 }
 
 /**
@@ -254,6 +368,35 @@ function toCleanTokens(text: string): string[] {
  */
 export function cleanForMatch(text: string): string {
 	return toCleanTokens(text).join(' ');
+}
+
+/**
+ * Get an artist name ready to be compared with another artist name.
+ *
+ * Unlike {@link cleanForMatch}, pure-number tokens are kept, because
+ * numbers are often a part of an artist name, e.g. "Yakuza 6", "21
+ * Savage" or "3 Doors Down".
+ *
+ * @param text - Artist name to clean up
+ * @returns Cleaned up text
+ */
+export function cleanArtistForMatch(text: string): string {
+	if (!text) {
+		return '';
+	}
+
+	const normalized = normalizeForMatch(
+		removeFeatSuffix(removeMetadataDecorations(text)),
+	);
+	if (!normalized) {
+		return '';
+	}
+
+	const tokens = normalized
+		.split(' ')
+		.filter((token) => !NOISE_TOKENS.has(token));
+
+	return tokens.length > 0 ? tokens.join(' ') : normalized;
 }
 
 /**
@@ -413,15 +556,22 @@ export function shouldImproveMatch(
 	resolvedArtist: string,
 	resolvedTrack: string,
 ): boolean {
-	const queryTrack = cleanForMatch(query.track ?? '');
+	const queryTrack = cleanQueryForMatch(query.track ?? '');
 	if (!queryTrack) {
 		return false;
 	}
 
-	if (
-		similarity(queryTrack, cleanForMatch(resolvedTrack)) <
-		TITLE_SIMILARITY_FLOOR
-	) {
+	const resolvedTrackClean = cleanForMatch(resolvedTrack);
+
+	/*
+	 * Entries describing another version of the track, e.g. a karaoke
+	 * version of a studio track, should be replaced with a better match.
+	 */
+	if (!areVersionsEqual(queryTrack, resolvedTrackClean)) {
+		return true;
+	}
+
+	if (similarity(queryTrack, resolvedTrackClean) < TITLE_SIMILARITY_FLOOR) {
 		return true;
 	}
 
@@ -429,10 +579,11 @@ export function shouldImproveMatch(
 		return true;
 	}
 
-	const queryArtist = cleanForMatch(query.artist ?? '');
-	if (queryArtist && cleanForMatch(resolvedArtist)) {
+	const queryArtist = cleanArtistForMatch(query.artist ?? '');
+	const resolvedArtistClean = cleanArtistForMatch(resolvedArtist);
+	if (queryArtist && resolvedArtistClean) {
 		return (
-			similarity(queryArtist, cleanForMatch(resolvedArtist)) <
+			similarity(queryArtist, resolvedArtistClean) <
 			RESOLVED_ARTIST_SIMILARITY_FLOOR
 		);
 	}
@@ -469,12 +620,48 @@ function isCoveredByQueryTrack(
 }
 
 /**
+ * Check whether one of the artists is the prefix of the other one, word
+ * by word. This is the case for "Yakuza 6" and "Yakuza 6: The Song of
+ * Life", or "JAY-Z" and "JAY-Z, Kanye West"; unlike raw bigram
+ * similarity it does not match near-anagrams such as "Takaya Kuroda".
+ *
+ * @param first - First artist, already cleaned
+ * @param second - Second artist, already cleaned
+ * @returns True if one artist name prefixes the other one
+ */
+function hasPrefixArtistMatch(first: string, second: string): boolean {
+	const firstTokens = first.split(' ').filter(Boolean);
+	const secondTokens = second.split(' ').filter(Boolean);
+
+	if (firstTokens.length === 0 || secondTokens.length === 0) {
+		return false;
+	}
+
+	const isPrefix = (prefix: string[], whole: string[]): boolean => {
+		return (
+			prefix.length <= whole.length &&
+			whole.slice(0, prefix.length).join(' ') === prefix.join(' ')
+		);
+	};
+
+	return (
+		isPrefix(firstTokens, secondTokens) ||
+		isPrefix(secondTokens, firstTokens)
+	);
+}
+
+/**
  * Find the track that best matches the info reported by a connector.
  *
  * Candidates with a close title are considered, candidates whose artist
  * resembles the reported artist are preferred, and the most popular of
  * them wins. Candidates describing another version of the track, e.g. a
  * live recording of a studio track, are ignored.
+ *
+ * If no candidate passes the checks above, use the most popular candidate
+ * that still resembles the reported track well enough, so that a scrobble
+ * is not lost when a site title is too decorated to match the Last.fm
+ * entry exactly, e.g. "RHYNO (From Grand Theft Auto VI: The Album)".
  *
  * @param candidates - List of tracks found on Last.fm
  * @param query - Track info reported by the connector
@@ -484,15 +671,24 @@ export function pickBestTrackMatch(
 	candidates: TrackMatchCandidate[],
 	query: TrackMatchQuery,
 ): TrackMatchCandidate | null {
-	const queryTrack = cleanForMatch(query.track ?? '');
-	const queryArtist = cleanForMatch(query.artist ?? '');
+	const queryTrack = cleanQueryForMatch(query.track ?? '');
+	const queryArtist = cleanArtistForMatch(query.artist ?? '');
 	const queryCombined = [queryArtist, queryTrack].filter(Boolean).join(' ');
 
 	if (!queryTrack) {
 		return null;
 	}
 
-	const scoredCandidates = [];
+	interface ScoredCandidate {
+		candidate: TrackMatchCandidate;
+		titleSimilarity: number;
+		artistSimilarity: number;
+		combinedSimilarity: number;
+		hasArtistSupport: boolean;
+		listeners: number;
+	}
+
+	const scoredCandidates: ScoredCandidate[] = [];
 
 	for (const candidate of candidates) {
 		if (!candidate?.artist || !candidate?.name) {
@@ -500,7 +696,7 @@ export function pickBestTrackMatch(
 		}
 
 		const candidateTrack = cleanForMatch(candidate.name);
-		const candidateArtist = cleanForMatch(candidate.artist);
+		const candidateArtist = cleanArtistForMatch(candidate.artist);
 		const candidateCombined = [candidateArtist, candidateTrack]
 			.filter(Boolean)
 			.join(' ');
@@ -509,67 +705,98 @@ export function pickBestTrackMatch(
 			continue;
 		}
 
-		const titleSimilarity = similarity(queryTrack, candidateTrack);
-		const artistSimilarity = similarity(queryArtist, candidateArtist);
-		const combinedSimilarity = similarity(queryCombined, candidateCombined);
-
-		const hasArtistSupport = artistSimilarity >= ARTIST_SIMILARITY_FLOOR;
-		const isEligible =
-			(titleSimilarity >= TITLE_SIMILARITY_FLOOR &&
-				(hasArtistSupport ||
-					combinedSimilarity >= COMBINED_SIMILARITY_FLOOR)) ||
-			combinedSimilarity >= STRONG_COMBINED_SIMILARITY_FLOOR ||
-			isCoveredByQueryTrack(queryTrack, candidateArtist, candidateTrack);
-
-		if (!isEligible) {
-			continue;
-		}
-
 		scoredCandidates.push({
 			candidate,
-			titleSimilarity,
-			artistSimilarity,
-			hasArtistSupport,
+			titleSimilarity: similarity(queryTrack, candidateTrack),
+			artistSimilarity: similarity(queryArtist, candidateArtist),
+			combinedSimilarity: similarity(queryCombined, candidateCombined),
+			hasArtistSupport:
+				similarity(queryArtist, candidateArtist) >=
+					STRONG_ARTIST_SIMILARITY_FLOOR ||
+				hasPrefixArtistMatch(queryArtist, candidateArtist),
 			listeners: candidate.listeners ?? 0,
 		});
 	}
 
-	if (scoredCandidates.length === 0) {
-		return null;
+	/*
+	 * Use the closest title first and the most popular version of it to
+	 * break ties. Prefer candidates whose artist resembles the reported
+	 * artist; if there are none, e.g. because the reported artist is a
+	 * channel name, fall back to all of the given candidates.
+	 */
+	const pickBest = (eligible: ScoredCandidate[]): ScoredCandidate | null => {
+		if (eligible.length === 0) {
+			return null;
+		}
+
+		const candidatesWithArtist = eligible.filter(
+			(scored) => scored.hasArtistSupport,
+		);
+		const pool =
+			candidatesWithArtist.length > 0 ? candidatesWithArtist : eligible;
+
+		return pool.reduce((prev, current) => {
+			if (current.titleSimilarity !== prev.titleSimilarity) {
+				return current.titleSimilarity > prev.titleSimilarity
+					? current
+					: prev;
+			}
+
+			if (current.listeners !== prev.listeners) {
+				return current.listeners > prev.listeners ? current : prev;
+			}
+
+			return current.artistSimilarity > prev.artistSimilarity
+				? current
+				: prev;
+		});
+	};
+
+	/*
+	 * Candidates are accepted if the title is close and either the artist
+	 * resembles the reported one or the combined "artist track" strings
+	 * are close, if the combined strings are very close, or if the
+	 * candidate is fully described by the reported title (which is the
+	 * case when a connector failed to split artist and track).
+	 */
+	const strictMatch = pickBest(
+		scoredCandidates.filter((scored) => {
+			const candidateTrack = cleanForMatch(scored.candidate.name);
+			const candidateArtist = cleanArtistForMatch(
+				scored.candidate.artist,
+			);
+			return (
+				(scored.titleSimilarity >= TITLE_SIMILARITY_FLOOR &&
+					(scored.hasArtistSupport ||
+						scored.combinedSimilarity >=
+							COMBINED_SIMILARITY_FLOOR)) ||
+				scored.combinedSimilarity >= STRONG_COMBINED_SIMILARITY_FLOOR ||
+				isCoveredByQueryTrack(
+					queryTrack,
+					candidateArtist,
+					candidateTrack,
+				)
+			);
+		}),
+	);
+	if (strictMatch) {
+		return strictMatch.candidate;
 	}
 
 	/*
-	 * Prefer candidates whose artist resembles the reported artist; if
-	 * there are none, e.g. because the reported artist is a channel name,
-	 * fall back to all of the eligible candidates.
+	 * If nothing passed the strict checks, fall back to the most popular
+	 * candidate whose artist resembles the reported one and whose title is
+	 * still reasonably close, so that decorated site titles keep working.
 	 */
-	const candidatesWithArtist = scoredCandidates.filter(
-		(scored) => scored.hasArtistSupport,
+	const relaxedMatch = pickBest(
+		scoredCandidates.filter((scored) => {
+			return (
+				(scored.titleSimilarity >= RELAXED_TITLE_SIMILARITY_FLOOR &&
+					scored.hasArtistSupport) ||
+				scored.combinedSimilarity >= RELAXED_COMBINED_SIMILARITY_FLOOR
+			);
+		}),
 	);
-	const pool =
-		candidatesWithArtist.length > 0
-			? candidatesWithArtist
-			: scoredCandidates;
 
-	/*
-	 * Of the remaining ones, use the closest title first and the most
-	 * popular version of it to break ties.
-	 */
-	const best = pool.reduce((prev, current) => {
-		if (current.titleSimilarity !== prev.titleSimilarity) {
-			return current.titleSimilarity > prev.titleSimilarity
-				? current
-				: prev;
-		}
-
-		if (current.listeners !== prev.listeners) {
-			return current.listeners > prev.listeners ? current : prev;
-		}
-
-		return current.artistSimilarity > prev.artistSimilarity
-			? current
-			: prev;
-	});
-
-	return best.candidate;
+	return relaxedMatch ? relaxedMatch.candidate : null;
 }

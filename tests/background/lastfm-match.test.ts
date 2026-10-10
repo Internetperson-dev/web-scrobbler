@@ -5,10 +5,12 @@
 import { expect, describe, it } from 'vitest';
 import {
 	cleanForMatch,
+	cleanQueryForMatch,
 	looksLikeSiteTitle,
 	normalizeForMatch,
 	pickBestTrackMatch,
 	prepareSearchQuery,
+	removeProducerCredit,
 	shouldImproveMatch,
 	similarity,
 } from '@/core/scrobbler/lastfm/lastfm-match';
@@ -38,6 +40,182 @@ const OTIS_SEARCH_RESULTS: TrackMatchCandidate[] = [
 		artist: 'The Throne',
 		name: 'Otis ft. Otis Redding (AUDIO)',
 		listeners: 26,
+	},
+];
+
+/**
+ * Real Last.fm search results for the track reported as
+ * "Yakuza 6 - Karaoke: Today is a Diamond (Kiryu)" by the YouTube
+ * connector.
+ */
+const YAKUZA_SEARCH_RESULTS: TrackMatchCandidate[] = [
+	{
+		artist: 'Yakuza 6: The Song of Life',
+		name: 'Today is a Diamond',
+		listeners: 10,
+	},
+	{ artist: 'Takaya Kuroda', name: 'Today Is A Diamond', listeners: 62 },
+	{
+		artist: '桐生一馬(黒田崇矢)',
+		name: 'Today is a diamond - Full Spec Edition',
+		listeners: 19562,
+	},
+	{
+		artist: 'Kazuma Kiryu(Takaya Kuroda)',
+		name: 'Today is a diamond - Full Spec Edition',
+		listeners: 5392,
+	},
+	{ artist: 'Today is a Diamond', name: 'Full Spec Edition', listeners: 37 },
+	{ artist: 'smooth_bass', name: 'Today is a Diamond', listeners: 21 },
+	{
+		artist: 'Kazuma Kiryu(Takaya Kuroda)',
+		name: 'Today Is a Diamond (Full Spec Edition)',
+		listeners: 265,
+	},
+	{
+		artist: 'Yakuza 6',
+		name: 'Karaoke: Today is a Diamond (Kiryu)',
+		listeners: 234,
+	},
+	{ artist: 'Kiryu Kazuma', name: 'Today Is A Diamond', listeners: 17 },
+	{
+		artist: 'Takaya Kuroda',
+		name: 'Today Is A Diamond (Full Spec Edition)',
+		listeners: 15,
+	},
+	{ artist: 'M.Reizuku', name: 'Today is a Diamond', listeners: 11 },
+	{
+		artist: 'Kazuma Kiryu(Takaya Kuroda)',
+		name: 'Today is a diamond【Full Spec Edition】',
+		listeners: 279,
+	},
+];
+
+/**
+ * Real Last.fm search results for the track reported as
+ * "Travis Scott - RHYNO (from GTA VI: The Album)" by the YouTube
+ * connector; the entry to scrobble to is
+ * "Travis Scott - RHYNO (from GTAVI: The Album)".
+ */
+const RHYNO_SEARCH_RESULTS: TrackMatchCandidate[] = [
+	{
+		artist: 'Travis Scott',
+		name: 'RHYNO (from GTAVI: The Album)',
+		listeners: 33407,
+	},
+	{
+		artist: 'Travis Scott, Grand Theft Auto VI',
+		name: 'RHYNO (from GTAVI: The Album)',
+		listeners: 1534,
+	},
+	{
+		artist: 'Travis Scott & Grand Theft Auto VI',
+		name: 'RHYNO (from GTAVI: The Album)',
+		listeners: 415,
+	},
+	{
+		artist: 'RHYNO (from GTAVI',
+		name: 'The Album)',
+		listeners: 143,
+	},
+	{
+		artist: 'トラヴィス・スコット',
+		name: 'RHYNO (from GTAVI: The Album)',
+		listeners: 49,
+	},
+	{
+		artist: 'Travis Scott e Grand Theft Auto VI',
+		name: 'RHYNO (from GTAVI: The Album)',
+		listeners: 78,
+	},
+	{
+		artist: 'Grand Theft Auto VI',
+		name: 'RHYNO',
+		listeners: 16,
+	},
+	{
+		artist: 'Grand Theft Auto VI',
+		name: 'Suzuki (from GTAVI: The Album)',
+		listeners: 191,
+	},
+	{
+		artist: 'Grand Theft Auto VI',
+		name: 'Don’t Chart (from GTAVI: The Album)',
+		listeners: 266,
+	},
+	{
+		artist: 'Atlantic Records',
+		name:
+			'Travis Scott – RHYNO (prod. by Guy-Manuel de Homem-Christo) ' +
+			'(From Grand Theft Auto VI: The Album)',
+		listeners: 75,
+	},
+	{
+		artist: 'Rauw Alejandro, Grand Theft Auto VI',
+		name: 'Macacoa 2000 (from GTAVI: The Album)',
+		listeners: 694,
+	},
+];
+
+/**
+ * Real Last.fm search results for the track reported as "Travis Scott -
+ * RHYNO (prod. by Guy-Manuel de Homem-Christo) (From Grand Theft Auto VI:
+ * The Album)" (the official upload title). No candidate has a close enough
+ * title and a matching artist for the strict checks; the most popular
+ * candidate that is still recognizable is used.
+ */
+const RHYNO_FULL_SPELLED_SEARCH_RESULTS: TrackMatchCandidate[] = [
+	{
+		artist: 'Travis Scott, Grand Theft Auto VI',
+		name: 'RHYNO (from GTAVI: The Album)',
+		listeners: 1534,
+	},
+	{
+		artist: 'Travis Scott & Grand Theft Auto VI',
+		name: 'RHYNO (from GTAVI: The Album)',
+		listeners: 415,
+	},
+	{
+		artist: 'Grand Theft Auto VI',
+		name: 'RHYNO',
+		listeners: 16,
+	},
+	{
+		artist: 'Travis Scott e Grand Theft Auto VI',
+		name: 'RHYNO (from GTAVI: The Album)',
+		listeners: 78,
+	},
+	{
+		artist: 'Travis Scott, Grand Theft Auto VI • Lossless',
+		name: 'RHYNO (from GTAVI: The Album)',
+		listeners: 17,
+	},
+	{
+		artist: 'Grand Theft Auto VI, Travis Scott',
+		name: 'RHYNO (from GTAVI: The Album)',
+		listeners: 35,
+	},
+	{
+		artist: 'Atlantic Records',
+		name:
+			'Travis Scott – RHYNO (prod. by Guy-Manuel de Homem-Christo) ' +
+			'(From Grand Theft Auto VI: The Album)',
+		listeners: 75,
+	},
+	{
+		artist: 'Michael Hunter',
+		name: 'Soviet Connection — The Theme From Grand Theft Auto IV',
+		listeners: 66865,
+	},
+	{
+		artist: 'Rockstar Games',
+		name: 'Grand Theft Auto VI Trailer 1',
+		listeners: 6226,
+	},
+	{
+		artist: 'Grand Theft Auto VI',
+		name: 'An Extended Look',
+		listeners: 535,
 	},
 ];
 
@@ -118,6 +296,63 @@ function testCleanForMatch() {
 	});
 }
 
+function testRemoveProducerCredit() {
+	it('should remove a bracketed producer credit', () => {
+		expect(
+			removeProducerCredit(
+				'RHYNO (prod. by Guy-Manuel de Homem-Christo)',
+			),
+		).to.be.equal('RHYNO');
+	});
+
+	it('should remove a bracketed "produced by" credit', () => {
+		expect(removeProducerCredit('Song (produced by Some Guy)')).to.be.equal(
+			'Song',
+		);
+	});
+
+	it('should keep a title without a producer credit', () => {
+		expect(removeProducerCredit('Midnight Drive')).to.be.equal(
+			'Midnight Drive',
+		);
+	});
+}
+
+function testCleanQueryForMatch() {
+	it('should strip a leading label and a single-word credit', () => {
+		expect(
+			cleanQueryForMatch('Karaoke: Today is a Diamond (Kiryu)'),
+		).to.be.equal('today is a diamond');
+	});
+
+	it('should keep a multi-word subtitle', () => {
+		expect(cleanQueryForMatch('Tonight (Best I Ever Had)')).to.be.equal(
+			'tonight best i ever had',
+		);
+	});
+
+	it('should keep a version qualifier', () => {
+		expect(cleanQueryForMatch('Song (Live at Wembley)')).to.be.equal(
+			'song live at wembley',
+		);
+	});
+
+	it('should remove a producer credit', () => {
+		expect(
+			cleanQueryForMatch(
+				'RHYNO (prod. by Guy-Manuel de Homem-Christo) ' +
+					'(from GTAVI: The Album)',
+			),
+		).to.be.equal('rhyno from gtavi the');
+	});
+
+	it('should keep a fully spelled subtitle', () => {
+		expect(
+			cleanQueryForMatch('RHYNO (From Grand Theft Auto VI: The Album)'),
+		).to.be.equal('rhyno from grand theft auto vi the');
+	});
+}
+
 function testPrepareSearchQuery() {
 	it('should remove decorations and feat. credits', () => {
 		expect(
@@ -129,6 +364,21 @@ function testPrepareSearchQuery() {
 		expect(prepareSearchQuery('Midnight Drive')).to.be.equal(
 			'Midnight Drive',
 		);
+	});
+
+	it('should strip a karaoke label and a single-word credit', () => {
+		expect(
+			prepareSearchQuery('Karaoke: Today is a Diamond (Kiryu)'),
+		).to.be.equal('Today is a Diamond');
+	});
+
+	it('should remove a producer credit', () => {
+		expect(
+			prepareSearchQuery(
+				'RHYNO (prod. by Guy-Manuel de Homem-Christo) ' +
+					'(from GTAVI: The Album)',
+			),
+		).to.be.equal('RHYNO (from GTAVI: The Album)');
 	});
 }
 
@@ -179,6 +429,45 @@ function testShouldImproveMatch() {
 	it('should not search if the track title is empty', () => {
 		expect(
 			shouldImproveMatch({ artist: 'Artist', track: '' }, 'A', 'B'),
+		).to.equal(false);
+	});
+
+	it('should improve a karaoke entry found for a site-style title', () => {
+		expect(
+			shouldImproveMatch(
+				{
+					artist: 'Yakuza 6',
+					track: 'Karaoke: Today is a Diamond (Kiryu)',
+				},
+				'Yakuza 6',
+				'Karaoke: Today is a Diamond (Kiryu)',
+			),
+		).to.equal(true);
+	});
+
+	it('should not search for a track that matches the Last.fm entry', () => {
+		expect(
+			shouldImproveMatch(
+				{
+					artist: 'Travis Scott',
+					track: 'RHYNO (from GTAVI: The Album)',
+				},
+				'Travis Scott',
+				'RHYNO (from GTAVI: The Album)',
+			),
+		).to.equal(false);
+	});
+
+	it('should not search if only the Last.fm spelling differs', () => {
+		expect(
+			shouldImproveMatch(
+				{
+					artist: 'Travis Scott',
+					track: 'RHYNO (from GTA VI: The Album)',
+				},
+				'Travis Scott',
+				'RHYNO (from GTAVI: The Album)',
+			),
 		).to.equal(false);
 	});
 }
@@ -251,6 +540,74 @@ function testPickBestTrackMatch() {
 			pickBestTrackMatch([], { artist: 'Artist', track: 'Song' }),
 		).to.equal(null);
 	});
+
+	it('should pick a canonical entry for a karaoke site title', () => {
+		const match = pickBestTrackMatch(YAKUZA_SEARCH_RESULTS, {
+			artist: 'Yakuza 6',
+			track: 'Karaoke: Today is a Diamond (Kiryu)',
+		});
+
+		expect(match).to.not.equal(null);
+		expect(match?.name).to.be.equal('Today is a Diamond');
+		expect(match?.artist).to.be.equal('Yakuza 6: The Song of Life');
+	});
+
+	it('should pick the canonical RHYNO entry for the abbreviated title', () => {
+		const match = pickBestTrackMatch(RHYNO_SEARCH_RESULTS, {
+			artist: 'Travis Scott',
+			track: 'RHYNO (from GTA VI: The Album)',
+		});
+
+		expect(match).to.not.equal(null);
+		expect(match?.name).to.be.equal('RHYNO (from GTAVI: The Album)');
+		expect(match?.artist).to.be.equal('Travis Scott');
+	});
+
+	it(
+		'should pick the most popular recognizable RHYNO entry for the ' +
+			'decorated official title',
+		() => {
+			const match = pickBestTrackMatch(
+				RHYNO_FULL_SPELLED_SEARCH_RESULTS,
+				{
+					artist: 'Travis Scott',
+					track:
+						'RHYNO (prod. by Guy-Manuel de Homem-Christo) ' +
+						'(From Grand Theft Auto VI: The Album)',
+				},
+			);
+
+			expect(match).to.not.equal(null);
+			expect(match?.name).to.be.equal('RHYNO (from GTAVI: The Album)');
+			expect(match?.artist).to.be.equal(
+				'Travis Scott, Grand Theft Auto VI',
+			);
+		},
+	);
+
+	it('should not replace a RHYNO entry with an unrelated popular track', () => {
+		const match = pickBestTrackMatch(
+			[
+				...RHYNO_FULL_SPELLED_SEARCH_RESULTS,
+				{
+					artist: 'Michael Hunter',
+					name: 'Soviet Connection — The Theme From Grand Theft Auto IV',
+					listeners: 400000,
+				},
+				{ artist: 'Rhyno', name: 'RHYNO', listeners: 5000 },
+			],
+			{
+				artist: 'Travis Scott',
+				track:
+					'RHYNO (prod. by Guy-Manuel de Homem-Christo) ' +
+					'(From Grand Theft Auto VI: The Album)',
+			},
+		);
+
+		expect(match).to.not.equal(null);
+		expect(match?.name).to.be.equal('RHYNO (from GTAVI: The Album)');
+		expect(match?.artist).to.be.equal('Travis Scott, Grand Theft Auto VI');
+	});
 }
 
 /**
@@ -260,6 +617,8 @@ function runTests() {
 	describe('normalizeForMatch', testNormalizeForMatch);
 	describe('similarity', testSimilarity);
 	describe('cleanForMatch', testCleanForMatch);
+	describe('removeProducerCredit', testRemoveProducerCredit);
+	describe('cleanQueryForMatch', testCleanQueryForMatch);
 	describe('prepareSearchQuery', testPrepareSearchQuery);
 	describe('looksLikeSiteTitle', testLooksLikeSiteTitle);
 	describe('shouldImproveMatch', testShouldImproveMatch);
