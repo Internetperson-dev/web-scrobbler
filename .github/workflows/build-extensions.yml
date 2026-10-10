@@ -38,6 +38,10 @@ jobs:
       - name: Upload the extension as an artifact
         uses: actions/upload-artifact@v7
         with:
+          # Upload the unpacked build so that the artifact itself is a
+          # valid extension package: the file you get from GitHub is a
+          # zip with manifest.json at the root and can be loaded in
+          # Firefox (about:debugging) or unpacked in Chrome directly.
           name: web-scrobbler-${{ matrix.browser }}
-          path: web-scrobbler-${{ matrix.browser }}.zip
+          path: build/${{ matrix.browser }}
           if-no-files-found: error
