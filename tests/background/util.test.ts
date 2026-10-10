@@ -183,6 +183,49 @@ const ARE_ALL_RESULTS_DATA = [
 	},
 ];
 
+const REMOVE_METADATA_DECORATIONS_DATA = [
+	{
+		description: 'should remove bracketed decorations',
+		args: ['Otis (Official Video)'],
+		expected: 'Otis',
+	},
+	{
+		description: 'should remove square-bracketed decorations',
+		args: ['Song [Lyrics]'],
+		expected: 'Song',
+	},
+	{
+		description: 'should remove full-width decorations',
+		args: ['Song 【Official MV】'],
+		expected: 'Song',
+	},
+	{
+		description: 'should remove trailing decorations',
+		args: ['Song - Official Video'],
+		expected: 'Song',
+	},
+	{
+		description: 'should remove a channel suffix',
+		args: ['Eminem - Topic'],
+		expected: 'Eminem',
+	},
+	{
+		description: 'should keep text without decorations',
+		args: ['Song with (something) else'],
+		expected: 'Song with (something) else',
+	},
+	{
+		description: 'should keep text that becomes empty',
+		args: ['(Official Video)'],
+		expected: '(Official Video)',
+	},
+	{
+		description: 'should do nothing if string is empty',
+		args: [''],
+		expected: '',
+	},
+];
+
 const testData = [
 	{
 		func: Util.isAnyResult,
@@ -203,6 +246,10 @@ const testData = [
 	{
 		func: Util.getSecondsToScrobble,
 		data: GET_SECONDS_TO_SCROBBLE_DATA,
+	},
+	{
+		func: Util.removeMetadataDecorations,
+		data: REMOVE_METADATA_DECORATIONS_DATA,
 	},
 ];
 

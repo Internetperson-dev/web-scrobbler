@@ -8,6 +8,23 @@ export interface LastFmTag {
 	url: string;
 }
 
+export interface LastFmTrackSearchMatch extends Record<string, unknown> {
+	artist: string;
+	name: string;
+	url: string;
+	mbid: string;
+	listeners?: string;
+	image?: LastFmImage[];
+}
+
+export interface LastFmTrackSearchResponse extends Record<string, unknown> {
+	results?: {
+		trackmatches?: {
+			track?: LastFmTrackSearchMatch | LastFmTrackSearchMatch[];
+		};
+	};
+}
+
 export interface LastFmTrackInfo extends Record<string, unknown> {
 	track: {
 		name: string;

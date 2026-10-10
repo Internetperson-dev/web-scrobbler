@@ -371,3 +371,57 @@ export async function fetchListenBrainzProfile(url: string) {
 export function clamp(min: number, value: number, max: number) {
 	return Math.min(max, Math.max(min, value));
 }
+
+/**
+ * Patterns of decorations that media sites add to track and artist names,
+ * but that are not a part of the actual metadata, e.g. "Song (Official
+ * Video)" or "Eminem - Topic".
+ */
+const METADATA_DECORATION_PATTERNS: RegExp[] = [
+	// (Official Video), (Official Lyric Video), 【Official MV】, ...
+	/[[(【（［]\s*official(?:\s+(?:music|lyric|lyrics))?\s+(?:video|audio|visualizer|mv)\s*[)\]】）］]/gi,
+	// (Music Video), (Lyrics Video), (Video)
+	/[[(【（［]\s*(?:music\s+|lyric\s+)?video\s*[)\]】）］]/gi,
+	// (Lyrics), (Lyric)
+	/[[(【（［]\s*lyrics?\s*[)\]】）］]/gi,
+	// (Audio)
+	/[[(【（［]\s*audio\s*[)\]】）］]/gi,
+	// (Visualizer)
+	/[[(【（［]\s*(?:official\s+)?visuali[sz]er\s*[)\]】）］]/gi,
+	// (MV)
+	/[[(【（［]\s*mv\s*[)\]】）］]/gi,
+	// (HD), (HQ), (4K)
+	/[[(【（［]\s*(?:hd|hq|4k|8k)\s*[)\]】）］]/gi,
+	// " - Topic" (auto-generated YouTube channel names)
+	/\s*[-–—]\s*topic$/i,
+	// "- Official Video" / "| Official Audio" at the end of the text
+	/\s*[-–—|]\s*official\s+(?:music\s+)?(?:video|audio)\s*$/i,
+];
+
+/**
+ * Remove site-specific decorations from a track or artist name, so that
+ * only the actual name is left, e.g. "Song (Official Video)" becomes
+ * "Song".
+ *
+ * The text is returned unchanged if it contains no decorations, or if
+ * removing them would remove the text entirely.
+ *
+ * @param text - Text to clean up
+ * @returns Cleaned up text
+ */
+export function removeMetadataDecorations(text: string): string {
+	if (!text) {
+		return text;
+	}
+
+	let result = text;
+	for (const pattern of METADATA_DECORATION_PATTERNS) {
+		result = result.replace(pattern, ' ');
+	}
+
+	if (result === text) {
+		return text;
+	}
+
+	return result.replace(/\s{2,}/g, ' ').trim() || text;
+}
