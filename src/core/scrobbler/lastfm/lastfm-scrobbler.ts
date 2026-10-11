@@ -7,6 +7,7 @@ import type { AudioScrobblerParams } from '@/core/scrobbler/audio-scrobbler/audi
 import AudioScrobbler from '@/core/scrobbler/audio-scrobbler/audio-scrobbler';
 import type { ScrobblerSongInfo } from '@/core/scrobbler/base-scrobbler';
 import {
+	DIRECT_MATCH_LISTENER_FLOOR,
 	pickBestTrackMatch,
 	prepareSearchQuery,
 	shouldImproveMatch,
@@ -92,10 +93,11 @@ export default class LastFmScrobbler extends AudioScrobbler {
 	 *
 	 * Last.fm is first asked about the track exactly as it was reported.
 	 * If the track is unknown, or if the found entry does not resemble the
-	 * reported one (e.g. because the title contains junk like "ft. …" or the
-	 * artist was resolved to an obscure compilation of the track), Last.fm
-	 * search is used to find the track with the closest title, preferring
-	 * the most popular version of it.
+	 * reported one (e.g. because the title contains junk like "ft. …", the
+	 * artist was resolved to an obscure compilation of the track, or the
+	 * entry is too unpopular to be the canonical one), Last.fm search is
+	 * used to find the track with the closest title, preferring the most
+	 * popular version of it.
 	 *
 	 * @param song - Song object
 	 * @returns Song info
@@ -121,7 +123,9 @@ export default class LastFmScrobbler extends AudioScrobbler {
 				query,
 				directInfo.track.artist.name,
 				directInfo.track.name,
-			)
+			) &&
+			(parseInt(directInfo.track.listeners) || 0) >=
+				DIRECT_MATCH_LISTENER_FLOOR
 		) {
 			return directData;
 		}

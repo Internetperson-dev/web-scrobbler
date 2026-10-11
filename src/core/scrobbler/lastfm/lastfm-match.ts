@@ -84,6 +84,15 @@ export const RELAXED_COMBINED_SIMILARITY_FLOOR = 0.7;
 export const RESOLVED_ARTIST_SIMILARITY_FLOOR = 0.5;
 
 /**
+ * Minimum number of listeners for an entry found by a direct lookup to be
+ * trusted on its own. Entries with fewer listeners are often site-only
+ * uploads of a track; the most popular matching entry is then looked up
+ * instead, e.g. "Tears Of..." by "Akira Yamaoka (Silent Hill Soundtrack)"
+ * (1 listener) is replaced with "Tears of..." by Akira Yamaoka.
+ */
+export const DIRECT_MATCH_LISTENER_FLOOR = 5000;
+
+/**
  * Characters that are not decomposed by Unicode normalization, but that
  * are commonly used instead of their ASCII counterparts.
  */

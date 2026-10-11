@@ -219,6 +219,102 @@ const RHYNO_FULL_SPELLED_SEARCH_RESULTS: TrackMatchCandidate[] = [
 	},
 ];
 
+/**
+ * Real Last.fm search results for the track reported as
+ * "B.O.B. (Bombs Over Baghdad) (Official HD Video)" by the YouTube
+ * connector. The direct lookup hits a site-only entry; the most popular
+ * matching OutKast entry should win.
+ */
+const BOB_SEARCH_RESULTS: TrackMatchCandidate[] = [
+	{
+		artist: 'OutKast',
+		name: 'B.O.B. (Bombs Over Baghdad) (Official HD Video)',
+		listeners: 1683,
+	},
+	{
+		artist: 'OutKast',
+		name: 'B.O.B. (Bombs Over Baghdad)',
+		listeners: 38020,
+	},
+	{
+		artist: 'OutKast',
+		name: 'B.O.B. - Bombs Over Baghdad',
+		listeners: 336456,
+	},
+	{
+		artist: 'OutKast - Topic',
+		name: 'B.O.B. (Bombs Over Baghdad)',
+		listeners: 16,
+	},
+	{ artist: 'OutKast', name: 'B.O.B (Bombs Over Baghdad)', listeners: 1445 },
+	{
+		artist: 'アウトキャスト',
+		name: 'B.O.B. - Bombs Over Baghdad',
+		listeners: 467,
+	},
+	{
+		artist: 'OutKast',
+		name: 'B.O.B. (Bombs Over Baghdad) - Acappella',
+		listeners: 1838,
+	},
+	{
+		artist: 'OutKast',
+		name: 'B.O.B. (Bombs Over Baghdad) - Instrumental',
+		listeners: 1549,
+	},
+	{
+		artist: 'OutKast',
+		name: 'B.O.B. (Bombs Over Baghdad) - Zack de la Rocha Remix',
+		listeners: 14715,
+	},
+];
+
+/**
+ * Real Last.fm search results for the track reported as "Tears Of..." by
+ * "Akira Yamaoka (Silent Hill Soundtrack)" (a YouTube channel name). The
+ * direct lookup hits a site-only entry with one listener; the canonical
+ * "Tears of..." entry by Akira Yamaoka should win.
+ */
+const TEARS_SEARCH_RESULTS: TrackMatchCandidate[] = [
+	{
+		artist: 'Akira Yamaoka (Silent Hill Soundtrack)',
+		name: 'Tears Of...',
+		listeners: 1,
+	},
+	{ artist: 'Avith Ortega', name: 'Tears of...', listeners: 13620 },
+	{ artist: 'Akira Yamaoka', name: 'Tears of...', listeners: 19746 },
+	{ artist: 'Akira Yamaoka', name: 'Tears Of', listeners: 12240 },
+	{ artist: 'Glorytellers', name: 'Tears Of...', listeners: 4660 },
+	{ artist: 'bellawella', name: 'Tears Of...', listeners: 1420 },
+	{ artist: 'Konami Kukeiha Club', name: 'Tears Of...', listeners: 2589 },
+	{ artist: 'Fleur de Pays', name: 'tears of...', listeners: 149 },
+	{ artist: 'TauCeti', name: 'Tears Of...', listeners: 572 },
+	{ artist: 'Konami', name: 'Tears Of...', listeners: 674 },
+];
+
+/**
+ * Real Last.fm search results for the track reported as
+ * "F*ck The Nordic Model" by Ghais Guevara (the search query has the
+ * producer credit removed). The entry with the exact title wins over the
+ * more popular censored variant.
+ */
+const GHAIS_SEARCH_RESULTS: TrackMatchCandidate[] = [
+	{
+		artist: 'Ghais Guevara',
+		name: 'Ghais Guevara - F*ck The Nordic Model (Prod. by Ghais Guevara)',
+		listeners: 40,
+	},
+	{ artist: 'Ghais Guevara', name: 'F*ck The Nordic Model', listeners: 19 },
+	{
+		artist: 'Ghais Guevara',
+		name: 'F*ck The Nordic Model (Prod. by Ghais Guevara)',
+		listeners: 13,
+	},
+	{ artist: 'Ghais Guevara', name: 'F**k the Nordic Model', listeners: 863 },
+	{ artist: 'Ghais Guevara', name: 'ck The Nordic Model', listeners: 103 },
+	{ artist: 'Jaja00', name: 'F**k the Nordic Model', listeners: 117 },
+];
+
 function testNormalizeForMatch() {
 	it('should remove diacritics', () => {
 		expect(normalizeForMatch('Beyoncé')).to.be.equal('beyonce');
@@ -351,6 +447,14 @@ function testCleanQueryForMatch() {
 			cleanQueryForMatch('RHYNO (From Grand Theft Auto VI: The Album)'),
 		).to.be.equal('rhyno from grand theft auto vi the');
 	});
+
+	it('should remove an "Official HD Video" decoration', () => {
+		expect(
+			cleanQueryForMatch(
+				'B.O.B. (Bombs Over Baghdad) (Official HD Video)',
+			),
+		).to.be.equal('b o b bombs over baghdad');
+	});
 }
 
 function testPrepareSearchQuery() {
@@ -380,6 +484,14 @@ function testPrepareSearchQuery() {
 			),
 		).to.be.equal('RHYNO (from GTAVI: The Album)');
 	});
+
+	it('should remove an "Official HD Video" decoration', () => {
+		expect(
+			prepareSearchQuery(
+				'B.O.B. (Bombs Over Baghdad) (Official HD Video)',
+			),
+		).to.be.equal('B.O.B. (Bombs Over Baghdad)');
+	});
 }
 
 function testLooksLikeSiteTitle() {
@@ -389,6 +501,7 @@ function testLooksLikeSiteTitle() {
 
 	it('should detect site decorations', () => {
 		expect(looksLikeSiteTitle('Song (Official Video)')).to.equal(true);
+		expect(looksLikeSiteTitle('Song (Official HD Video)')).to.equal(true);
 		expect(looksLikeSiteTitle('Song [Lyrics]')).to.equal(true);
 	});
 
@@ -469,6 +582,19 @@ function testShouldImproveMatch() {
 				'RHYNO (from GTAVI: The Album)',
 			),
 		).to.equal(false);
+	});
+
+	it('should improve an entry with an "Official HD Video" suffix', () => {
+		expect(
+			shouldImproveMatch(
+				{
+					artist: 'OutKast',
+					track: 'B.O.B. (Bombs Over Baghdad) (Official HD Video)',
+				},
+				'OutKast',
+				'B.O.B. (Bombs Over Baghdad) (Official HD Video)',
+			),
+		).to.equal(true);
 	});
 }
 
@@ -607,6 +733,39 @@ function testPickBestTrackMatch() {
 		expect(match).to.not.equal(null);
 		expect(match?.name).to.be.equal('RHYNO (from GTAVI: The Album)');
 		expect(match?.artist).to.be.equal('Travis Scott, Grand Theft Auto VI');
+	});
+
+	it('should replace an "Official HD Video" entry with an OutKast entry', () => {
+		const match = pickBestTrackMatch(BOB_SEARCH_RESULTS, {
+			artist: 'OutKast',
+			track: 'B.O.B. (Bombs Over Baghdad) (Official HD Video)',
+		});
+
+		expect(match).to.not.equal(null);
+		expect(match?.name).to.be.equal('B.O.B. - Bombs Over Baghdad');
+		expect(match?.artist).to.be.equal('OutKast');
+	});
+
+	it('should pick the canonical entry for a channel-style artist', () => {
+		const match = pickBestTrackMatch(TEARS_SEARCH_RESULTS, {
+			artist: 'Akira Yamaoka (Silent Hill Soundtrack)',
+			track: 'Tears Of...',
+		});
+
+		expect(match).to.not.equal(null);
+		expect(match?.name).to.be.equal('Tears of...');
+		expect(match?.artist).to.be.equal('Akira Yamaoka');
+	});
+
+	it('should pick the exact title over the more popular censored variant', () => {
+		const match = pickBestTrackMatch(GHAIS_SEARCH_RESULTS, {
+			artist: 'Ghais Guevara',
+			track: 'F*ck The Nordic Model (Prod. by Ghais Guevara)',
+		});
+
+		expect(match).to.not.equal(null);
+		expect(match?.name).to.be.equal('F*ck The Nordic Model');
+		expect(match?.artist).to.be.equal('Ghais Guevara');
 	});
 }
 

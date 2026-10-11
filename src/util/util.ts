@@ -378,10 +378,10 @@ export function clamp(min: number, value: number, max: number) {
  * Video)" or "Eminem - Topic".
  */
 const METADATA_DECORATION_PATTERNS: RegExp[] = [
-	// (Official Video), (Official Lyric Video), 【Official MV】, ...
-	/[[(【（［]\s*official(?:\s+(?:music|lyric|lyrics))?\s+(?:video|audio|visualizer|mv)\s*[)\]】）］]/gi,
-	// (Music Video), (Lyrics Video), (Video)
-	/[[(【（［]\s*(?:music\s+|lyric\s+)?video\s*[)\]】）］]/gi,
+	// (Official Video), (Official HD Video), (Official 4K Lyric Video), 【Official MV】, ...
+	/[[(【（［]\s*official(?:\s+(?:hd|hq|4k|8k))?(?:\s+(?:music|lyric|lyrics))?\s+(?:video|audio|visualizer|mv)\s*[)\]】）］]/gi,
+	// (Music Video), (HD Video), (Lyrics Video), (Video)
+	/[[(【（［]\s*(?:(?:music|lyric|lyrics|hd|hq|4k|8k)\s+)*video\s*[)\]】）］]/gi,
 	// (Lyrics), (Lyric)
 	/[[(【（［]\s*lyrics?\s*[)\]】）］]/gi,
 	// (Audio)
@@ -394,8 +394,8 @@ const METADATA_DECORATION_PATTERNS: RegExp[] = [
 	/[[(【（［]\s*(?:hd|hq|4k|8k)\s*[)\]】）］]/gi,
 	// " - Topic" (auto-generated YouTube channel names)
 	/\s*[-–—]\s*topic$/i,
-	// "- Official Video" / "| Official Audio" at the end of the text
-	/\s*[-–—|]\s*official\s+(?:music\s+)?(?:video|audio)\s*$/i,
+	// "- Official Video" / "| Official Audio" / "- Official HD Video" ...
+	/\s*[-–—|]\s*official(?:\s+(?:hd|hq|4k|8k))?(?:\s+music)?\s+(?:video|audio)\s*$/i,
 ];
 
 /**

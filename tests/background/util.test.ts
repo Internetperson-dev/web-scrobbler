@@ -190,6 +190,21 @@ const REMOVE_METADATA_DECORATIONS_DATA = [
 		expected: 'Otis',
 	},
 	{
+		description: 'should remove "Official HD Video" decorations',
+		args: ['B.O.B. (Bombs Over Baghdad) (Official HD Video)'],
+		expected: 'B.O.B. (Bombs Over Baghdad)',
+	},
+	{
+		description: 'should remove qualified "Official HD Audio" decorations',
+		args: ['Song (Official HD Audio)'],
+		expected: 'Song',
+	},
+	{
+		description: 'should remove "HD Video" decorations',
+		args: ['Song (HD Video)'],
+		expected: 'Song',
+	},
+	{
 		description: 'should remove square-bracketed decorations',
 		args: ['Song [Lyrics]'],
 		expected: 'Song',
